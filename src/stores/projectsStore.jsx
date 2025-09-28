@@ -1,116 +1,97 @@
+// stores/projectsStore.js
 "use client";
-
 import { makeAutoObservable } from "mobx";
-
-const genId = () =>
-  typeof crypto !== "undefined" && crypto.randomUUID
-    ? crypto.randomUUID()
-    : Date.now().toString() + Math.random().toString(36).slice(2);
 
 class ProjectsStore {
   projects = [];
-  logs = []; // <--- всегда массив!
-
+  logs = [];
   defectStatuses = ["Новая", "В работе", "На проверке", "Закрыта", "Отменена"];
 
   constructor() {
     makeAutoObservable(this);
-
-    // Демо-данные
-    this.projects = [
-      {
-        id: genId(),
-        name: "ЖК ПИК",
-        status: "В процессе",
-        defects: [
-          {
-            id: genId(),
-            title: "Течет крыша",
-            description: "Протечка в подъезде №3",
-            priority: "Высокий",
-            assignee: "Иванов",
-            deadline: "2025-10-01",
-            attachments: [],
-            status: "Новая",
-            cost: 50000,
-          },
-        ],
-      },
-    ];
+    this.fetchProjects();
   }
 
-  // --- ЛОГИ ---
-  addLog(action, entity, message) {
-    this.logs.unshift({
-      id: genId(),
-      time: new Date().toLocaleString(),
-      action,
-      entity,
-      message,
+  async fetchProjects() {
+    const res = await fetch("/api/projects", { cache: "no-store" });
+    this.projects = await res.json();
+  }
+
+  // ===== LOGS =====
+  async fetchLogs() {
+    const res = await fetch("/api/logs", { cache: "no-store" });
+    this.logs = await res.json();
+  }
+
+  async addLog(action, entity, message) {
+    await fetch("/api/logs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, entity, message }),
     });
+    await this.fetchLogs();
   }
 
-  // --- PROJECTS ---
-  addProject(project) {
-    const withIds = project.defects.map((d) => ({ ...d, id: genId() }));
-    const newProject = { ...project, id: genId(), defects: withIds };
-    this.projects.push(newProject);
-
-    this.addLog("Добавление", "Проект", `Создан проект "${newProject.name}"`);
+  // ===== PROJECTS =====
+  async addProject(project) {
+    await fetch("/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(project),
+    });
+    await this.fetchProjects();
+    await this.addLog("Добавление", "Проект", `Создан проект "${project.name}"`);
   }
 
-  updateProject(index, field, value) {
-    const project = this.projects[index];
-    const oldValue = project[field];
-    project[field] = value;
-
-    this.addLog(
-      "Изменение",
-      "Проект",
-      `Поле "${field}" у проекта "${project.name}" изменено: ${oldValue} → ${value}`
-    );
+  async updateProject(projectId, field, value) {
+    await fetch(`/api/projects/${projectId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ field, value }),
+    });
+    await this.fetchProjects();
+    await this.addLog("Изменение", "Проект", `Поле "${field}" изменено → ${value}`);
   }
 
-  deleteProject(index) {
-    const name = this.projects[index].name;
-    this.projects.splice(index, 1);
-
-    this.addLog("Удаление", "Проект", `Удалён проект "${name}"`);
+  async deleteProject(projectId) {
+    await fetch(`/api/projects/${projectId}`, { method: "DELETE" });
+    await this.fetchProjects();
+    await this.addLog("Удаление", "Проект", `Удалён проект`);
   }
 
-  // --- DEFECTS ---
-  addDefect(projectIndex, defect) {
-    const newDefect = { ...defect, id: genId() };
-    this.projects[projectIndex].defects.push(newDefect);
-
-    this.addLog(
-      "Добавление",
-      "Дефект",
-      `В проект "${this.projects[projectIndex].name}" добавлен дефект "${newDefect.title}"`
-    );
+  // ===== DEFECTS =====
+  async addDefect(projectId, defect) {
+    await fetch(`/api/projects/${projectId}/defects`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(defect),
+    });
+    await this.fetchProjects();
+    await this.addLog("Добавление", "Дефект", `Добавлен дефект "${defect.title}"`);
   }
 
-  updateDefect(projectIndex, defectIndex, field, value) {
-    const defect = this.projects[projectIndex].defects[defectIndex];
-    const oldValue = defect[field];
-    defect[field] = value;
-
-    this.addLog(
-      "Изменение",
-      "Дефект",
-      `Поле "${field}" у дефекта "${defect.title}" изменено: ${oldValue} → ${value}`
-    );
+  async updateDefect(projectId, defectId, field, value) {
+    await fetch(`/api/projects/${projectId}/defects/${defectId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ field, value }),
+    });
+    await this.fetchProjects();
+    await this.addLog("Изменение", "Дефект", `Поле "${field}" изменено → ${value}`);
   }
 
-  deleteDefect(projectIndex, defectIndex) {
-    const defect = this.projects[projectIndex].defects[defectIndex];
-    this.projects[projectIndex].defects.splice(defectIndex, 1);
+  async deleteDefect(projectId, defectId) {
+    await fetch(`/api/projects/${projectId}/defects/${defectId}`, {
+      method: "DELETE",
+    });
+    await this.fetchProjects();
+    await this.addLog("Удаление", "Дефект", `Удалён дефект`);
+  }
 
-    this.addLog(
-      "Удаление",
-      "Дефект",
-      `Из проекта "${this.projects[projectIndex].name}" удалён дефект "${defect.title}"`
-    );
+  // (если нужно для Defects page)
+  async fetchDefects() {
+    const res = await fetch("/api/defects", { cache: "no-store" });
+    return await res.json();
   }
 }
 

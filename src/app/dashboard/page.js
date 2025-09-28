@@ -10,16 +10,29 @@ import {
 import { projectsStore } from "@/stores/projectsStore";
 import { List, Pencil, Plus, Trash2 } from "lucide-react";
 import { observer } from "mobx-react-lite";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import LogoutButton from "../logoutButton";
 const Logs = observer(() => {
   const store = projectsStore;
-
+  const session = useSession()
+  const router = useRouter()
+  console.log(session)
+   if (session.status=="unauthenticated") {
+     router.push("/"); // редирект на страницу входа
+   }
+  useEffect(() => {
+    store.fetchLogs();
+  }, []);
   return (
     <div className="font-sans p-6 space-y-6">
-      <div className="flex gap-6">
+      <div className="flex items-center gap-6">
         <Link href="/projects">Проекты</Link>
 
         <Link href="/defects">Дефекты</Link>
+          <LogoutButton />  <div>Вход осуществлен как {session?.data?.user?.role}</div>
       </div>
       <Card>
         <CardHeader>

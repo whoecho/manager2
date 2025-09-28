@@ -3,24 +3,27 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { projectsStore } from "@/stores/projectsStore";
 import { observer } from "mobx-react-lite";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import LogoutButton from "../logoutButton";
 
 const Defects = observer(() => {
   const store = projectsStore;
@@ -29,17 +32,22 @@ const Defects = observer(() => {
   const [filterPriority, setFilterPriority] = useState("");
   const [sortField, setSortField] = useState("");
   const [sortDirection, setSortDirection] = useState("asc");
+  const [allDefects, setAllDefects] = useState([]);
+  const session = useSession()
+  const router = useRouter()
+  console.log(session)
+   if (session.status=="unauthenticated") {
+     router.push("/"); // редирект на страницу входа
+   }
+  // Загружаем дефекты из API при монтировании
+  useEffect(() => {
+    store.fetchDefects().then(setAllDefects);
+  }, []);
 
-  // Собираем все дефекты из MobX store
-  const allDefects = useMemo(() => {
-    let defects = store.projects.flatMap((project) =>
-      project.defects.map((defect) => ({
-        ...defect,
-        projectName: project.name,
-      }))
-    );
+  // Поиск, фильтрация, сортировка
+  const filteredDefects = useMemo(() => {
+    let defects = [...allDefects];
 
-    // Поиск
     if (search) {
       defects = defects.filter(
         (defect) =>
@@ -49,12 +57,10 @@ const Defects = observer(() => {
       );
     }
 
-    // Фильтр
     if (filterPriority && filterPriority !== "all") {
       defects = defects.filter((defect) => defect.priority === filterPriority);
     }
 
-    // Сортировка
     if (sortField) {
       defects.sort((a, b) => {
         const aValue = a[sortField];
@@ -66,13 +72,15 @@ const Defects = observer(() => {
     }
 
     return defects;
-  }, [store.projects, search, filterPriority, sortField, sortDirection]);
+  }, [allDefects, search, filterPriority, sortField, sortDirection]);
 
   return (
     <div className="p-6 space-y-4">
-      <div className="flex gap-6">
+      <div className="flex items-center gap-6">
         <Link href="/projects">Проекты</Link>
         <Link href="/dashboard">Журнал изменений</Link>
+        <LogoutButton />
+        <div>Вход осуществлен как {session?.data?.user?.role}</div>
       </div>
 
       <h1 className="text-2xl font-bold">Дефекты проектов</h1>
@@ -97,9 +105,9 @@ const Defects = observer(() => {
         </Select>
 
         <Button
-          onClick={() => {
-            setSortDirection(sortDirection === "asc" ? "desc" : "asc");
-          }}
+          onClick={() =>
+            setSortDirection(sortDirection === "asc" ? "desc" : "asc")
+          }
         >
           Сортировать по{" "}
           {sortField == "projectName"
@@ -147,7 +155,7 @@ const Defects = observer(() => {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {allDefects.map((defect) => (
+          {filteredDefects.map((defect) => (
             <TableRow key={defect.id}>
               <TableCell>{defect.projectName}</TableCell>
               <TableCell>{defect.title}</TableCell>
