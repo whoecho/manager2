@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -17,27 +17,16 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { projectsStore } from "@/stores/projectsStore";
+import { observer } from "mobx-react-lite";
 import Link from "next/link";
 import { useState } from "react";
 
-export default function Projects() {
-  const [projects, setProjects] = useState([
-    {
-      name: "ЖК ПИК",
-      status: "В процессе",
-      defects: [
-        {
-          title: "Течет крыша",
-          description: "Протечка в подъезде №3",
-          priority: "Высокий",
-          assignee: "Иванов",
-          deadline: "2025-10-01",
-          attachments: [],
-          status: "Новая",
-        },
-      ],
-    },
-  ]);
+// 🔥 Иконки
+import { Hammer, Plus, Trash2 } from "lucide-react";
+
+const Projects = observer(() => {
+  const store = projectsStore;
 
   const [newProject, setNewProject] = useState({
     name: "",
@@ -53,25 +42,8 @@ export default function Projects() {
     deadline: "",
     attachments: [],
     status: "Новая",
+    cost: 0,
   });
-
-  const defectStatuses = [
-    "Новая",
-    "В работе",
-    "На проверке",
-    "Закрыта",
-    "Отменена",
-  ];
-
-  const updateProject = (index, field, value) => {
-    const updated = [...projects];
-    updated[index][field] = value;
-    setProjects(updated);
-  };
-
-  const deleteProject = (index) => {
-    setProjects(projects.filter((_, i) => i !== index));
-  };
 
   const addDefectToNew = () => {
     if (!newDefect.title) return;
@@ -87,47 +59,31 @@ export default function Projects() {
       deadline: "",
       attachments: [],
       status: "Новая",
+      cost: 0,
     });
   };
 
   const addProject = () => {
     if (!newProject.name) return;
-    setProjects([...projects, newProject]);
+    store.addProject(newProject);
     setNewProject({ name: "", status: "В процессе", defects: [] });
-  };
-
-  const updateDefect = (
-    projectIndex,
-    defectIndex,
-    field,
-    value
-  ) => {
-    const updated = [...projects];
-    updated[projectIndex].defects[defectIndex][field] = value;
-    setProjects(updated);
-  };
-
-  const deleteDefect = (projectIndex, defectIndex) => {
-    const updated = [...projects];
-    updated[projectIndex].defects = updated[projectIndex].defects.filter(
-      (_, i) => i !== defectIndex
-    );
-    setProjects(updated);
   };
 
   return (
     <div className="font-sans p-6 space-y-6">
       {/* Навигация */}
       <div className="flex gap-6">
-        <Link href="/">Проекты</Link>
-        <Link href="/">Статистика</Link>
+
+        <Link href="/dashboard">Статистика</Link>
         <Link href="/defects">Дефекты</Link>
       </div>
 
       {/* Добавление проекта */}
       <Card>
         <CardHeader>
-          <CardTitle>Добавить проект</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Plus className="w-4 h-4" /> Добавить проект
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <Input
@@ -185,6 +141,12 @@ export default function Projects() {
             value={newDefect.deadline}
             onChange={(e) => setNewDefect({ ...newDefect, deadline: e.target.value })}
           />
+          <Input
+            type="number"
+            placeholder="Стоимость (₽)"
+            value={newDefect.cost}
+            onChange={(e) => setNewDefect({ ...newDefect, cost: +e.target.value })}
+          />
           <Select
             value={newDefect.status}
             onValueChange={(val) => setNewDefect({ ...newDefect, status: val })}
@@ -193,44 +155,38 @@ export default function Projects() {
               <SelectValue placeholder="Статус дефекта" />
             </SelectTrigger>
             <SelectContent>
-              {defectStatuses.map((s) => (
+              {store.defectStatuses.map((s) => (
                 <SelectItem key={s} value={s}>
                   {s}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <Button variant="default" onClick={addDefectToNew}>
-            Добавить дефект
+          <Button onClick={addDefectToNew}>
+            <Plus className="w-4 h-4 mr-2" /> Добавить дефект
           </Button>
-
-          <div className="text-sm text-gray-600">
-            {newProject.defects.map((d, idx) => (
-              <div key={idx}>
-                {d.title} — {d.status}
-              </div>
-            ))}
-          </div>
         </CardContent>
         <CardFooter>
-          <Button onClick={addProject}>Добавить проект</Button>
+          <Button onClick={addProject}>
+            <Plus className="w-4 h-4 mr-2" /> Добавить проект
+          </Button>
         </CardFooter>
       </Card>
 
       {/* Список проектов */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {projects.map((project, i) => (
-          <Card key={i}>
+        {store.projects.map((project, i) => (
+          <Card key={project.id}>
             <CardHeader>
               <Input
                 value={project.name}
-                onChange={(e) => updateProject(i, "name", e.target.value)}
+                onChange={(e) => store.updateProject(i, "name", e.target.value)}
               />
             </CardHeader>
             <CardContent className="space-y-3">
               <Select
                 value={project.status}
-                onValueChange={(val) => updateProject(i, "status", val)}
+                onValueChange={(val) => store.updateProject(i, "status", val)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Статус" />
@@ -243,23 +199,21 @@ export default function Projects() {
               </Select>
 
               {project.defects.map((defect, j) => (
-                <Card key={j} className="p-3 space-y-2 bg-gray-50">
+                <Card key={defect.id} className="p-3 space-y-2 bg-gray-50">
                   <Input
                     value={defect.title}
-                    onChange={(e) => updateDefect(i, j, "title", e.target.value)}
+                    onChange={(e) => store.updateDefect(i, j, "title", e.target.value)}
                   />
                   <Textarea
                     value={defect.description}
                     onChange={(e) =>
-                      updateDefect(i, j, "description", e.target.value)
+                      store.updateDefect(i, j, "description", e.target.value)
                     }
                   />
                   <div className="flex gap-2">
                     <Select
                       value={defect.priority}
-                      onValueChange={(val) =>
-                        updateDefect(i, j, "priority", val)
-                      }
+                      onValueChange={(val) => store.updateDefect(i, j, "priority", val)}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -273,7 +227,7 @@ export default function Projects() {
                     <Input
                       value={defect.assignee}
                       onChange={(e) =>
-                        updateDefect(i, j, "assignee", e.target.value)
+                        store.updateDefect(i, j, "assignee", e.target.value)
                       }
                       placeholder="Исполнитель"
                     />
@@ -282,20 +236,29 @@ export default function Projects() {
                     type="date"
                     value={defect.deadline}
                     onChange={(e) =>
-                      updateDefect(i, j, "deadline", e.target.value)
+                      store.updateDefect(i, j, "deadline", e.target.value)
                     }
                   />
+                  <div className="flex items-center gap-2">
+                    <Hammer className="w-4 h-4" />
+                    <Input
+                      type="number"
+                      value={defect.cost}
+                      onChange={(e) =>
+                        store.updateDefect(i, j, "cost", +e.target.value)
+                      }
+                      placeholder="Стоимость (₽)"
+                    />
+                  </div>
                   <Select
                     value={defect.status}
-                    onValueChange={(val) =>
-                      updateDefect(i, j, "status", val)
-                    }
+                    onValueChange={(val) => store.updateDefect(i, j, "status", val)}
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {defectStatuses.map((s) => (
+                      {store.defectStatuses.map((s) => (
                         <SelectItem key={s} value={s}>
                           {s}
                         </SelectItem>
@@ -305,16 +268,16 @@ export default function Projects() {
                   <Button
                     variant="destructive"
                     size="sm"
-                    onClick={() => deleteDefect(i, j)}
+                    onClick={() => store.deleteDefect(i, j)}
                   >
-                    Удалить дефект
+                    <Trash2 className="w-4 h-4 mr-2" /> Удалить дефект
                   </Button>
                 </Card>
               ))}
             </CardContent>
             <CardFooter>
-              <Button variant="destructive" onClick={() => deleteProject(i)}>
-                Удалить проект
+              <Button variant="destructive" onClick={() => store.deleteProject(i)}>
+                <Trash2 className="w-4 h-4 mr-2" /> Удалить проект
               </Button>
             </CardFooter>
           </Card>
@@ -322,4 +285,6 @@ export default function Projects() {
       </div>
     </div>
   );
-}
+});
+
+export default Projects;
